@@ -1,1 +1,1 @@
-web: gunicorn api_integration_data_processing.wsgi
+web: gunicorn api_integration_data_processing.wsgi:application
