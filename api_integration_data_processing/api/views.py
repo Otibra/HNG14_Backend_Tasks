@@ -1,10 +1,8 @@
-from django.shortcuts import render
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from rest_framework import status
+from django.utils import timezone
 import requests
-
-from .models import ClassifyName
 
 
 def error_response(message, http_status):
@@ -29,11 +27,14 @@ def gender_view(request):
 
     try:
         # ---------------- external API ----------------
-        data = requests.get(
+        response = requests.get(
             "https://api.genderize.io",
             params={"name": name},
             timeout=5
-        ).json()
+        )
+
+        response.raise_for_status()  # ✅ ensures HTTP errors are caught
+        data = response.json()
 
         gender = data.get("gender")
         probability = float(data.get("probability") or 0)
@@ -48,37 +49,31 @@ def gender_view(request):
 
         is_confident = probability >= 0.7 and count >= 100
 
-        # ---------------- DB write ----------------
-        obj = ClassifyName.objects.create(
-            name=name,
-            gender=gender,
-            probability=probability,
-            sample_size=count,
-            is_confident=is_confident
-        )
+        # ---------------- timestamp ----------------
+        processed_at = timezone.now()
 
         # ---------------- response ----------------
         return Response({
             "status": "success",
             "data": {
-                "name": obj.name,
-                "gender": obj.gender,
-                "probability": obj.probability,
-                "sample_size": obj.sample_size,
-                "is_confident": obj.is_confident,
-                "processed_at": obj.processed_at.isoformat() + "Z"
+                "name": name,
+                "gender": gender,
+                "probability": probability,
+                "sample_size": count,
+                "is_confident": is_confident,
+                "processed_at": processed_at.isoformat() + "Z"
             }
         })
 
     except requests.RequestException:
         return error_response(
-            "Upstream or server failure",
+            "Upstream or external API failure",
             status.HTTP_502_BAD_GATEWAY
         )
 
-    except Exception:
+    except Exception as e:
         return error_response(
-            "Internal server error",
+            str(e),  # 👈 helpful for debugging (you can hide later)
             status.HTTP_500_INTERNAL_SERVER_ERROR
         )
     
