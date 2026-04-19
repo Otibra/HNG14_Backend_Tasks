@@ -6,4 +6,4 @@ os.environ.setdefault(
     "api_integration_data_processing.settings"
 )
 
-app = get_wsgi_application()
+application = get_wsgi_application()
